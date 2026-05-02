@@ -1,0 +1,81 @@
+# syntax=docker/dockerfile:1.7-labs
+#
+# Zadanie 1 — część NIEOBOWIĄZKOWA, wariant 3 (+80%).
+# Autor: Hubert Kolejko.
+#
+# Cele realizowane przez ten Dockerfile:
+#   1. Multi-arch (linux/amd64 + linux/arm64) — wykorzystuje BUILDPLATFORM/TARGETPLATFORM.
+#   2. Rozszerzony frontend BuildKit (1.7-labs) — udostępnia m.in. zaawansowane mount-y.
+#   3. Pobieranie kodu aplikacji z publicznego repozytorium GitHub w trakcie buildu
+#      przy użyciu mount=type=ssh (preferowane) lub mount=type=secret (fallback)
+#      — kod NIE jest wstrzykiwany przez COPY z lokalnego kontekstu.
+#   4. Wieloetapowy build z osobnym etapem `source` -> `builder` -> runtime (scratch).
+#   5. Obraz finalny scratch, OCI labels, healthcheck — analogicznie jak Dockerfile.
+
+ARG GO_VERSION=1.22
+
+# URL repozytorium domyślnie wskazuje na repo autora; można nadpisać --build-arg.
+ARG REPO_URL=https://github.com/GhostekTheGuy/zad1_lab_docker.git
+ARG REPO_REF=main
+
+# ---------- Stage 1: source — pobranie kodu z GitHub ----------
+# Użycie BUILDPLATFORM, bo git clone nie zależy od architektury docelowej.
+FROM --platform=$BUILDPLATFORM alpine:3.20 AS source
+RUN apk add --no-cache git openssh-client ca-certificates
+ARG REPO_URL
+ARG REPO_REF
+WORKDIR /src
+# Wariant A: mount=type=ssh — wykorzystuje agenta SSH hosta przekazanego --ssh default.
+# Wariant B: mount=type=secret — wykorzystuje sekret 'gh_token' przekazany --secret id=gh_token,...
+# Próbujemy najpierw SSH (jeśli klucz jest w agencie), potem fallback na secret z PAT,
+# a w ostateczności anonimowy klon HTTPS (repo jest publiczne, więc to bezpieczna ostatnia
+# linia — ale celem zadania jest pokazanie funkcjonalności mount, której używamy wyżej).
+RUN --mount=type=ssh \
+    --mount=type=secret,id=gh_token,required=false \
+    set -eu; \
+    mkdir -p /root/.ssh && ssh-keyscan -t rsa,ed25519 github.com >> /root/.ssh/known_hosts 2>/dev/null; \
+    SSH_REPO=$(printf '%s' "$REPO_URL" | sed 's|https://github.com/|git@github.com:|'); \
+    if [ -n "${SSH_AUTH_SOCK:-}" ] && git clone --depth 1 --branch "$REPO_REF" "$SSH_REPO" /src 2>/dev/null; then \
+        echo "[source] kod pobrany przez SSH (mount=type=ssh)"; \
+    elif [ -s /run/secrets/gh_token ] && \
+         git clone --depth 1 --branch "$REPO_REF" \
+            "https://$(cat /run/secrets/gh_token)@${REPO_URL#https://}" /src 2>/dev/null; then \
+        echo "[source] kod pobrany przez HTTPS+token (mount=type=secret)"; \
+    else \
+        git clone --depth 1 --branch "$REPO_REF" "$REPO_URL" /src; \
+        echo "[source] kod pobrany anonimowo (repo publiczne)"; \
+    fi
+
+# ---------- Stage 2: builder ----------
+FROM --platform=$BUILDPLATFORM golang:${GO_VERSION}-alpine AS builder
+ARG TARGETOS
+ARG TARGETARCH
+WORKDIR /src
+# Pobieramy go.mod ze stage'u source, aby wyodrębnić warstwę cache modułów.
+COPY --from=source /src/go.mod ./
+RUN --mount=type=cache,target=/go/pkg/mod \
+    go mod download
+# Pełny kod aplikacji.
+COPY --from=source /src/cmd ./cmd
+RUN --mount=type=cache,target=/go/pkg/mod \
+    --mount=type=cache,target=/root/.cache/go-build \
+    CGO_ENABLED=0 GOOS=${TARGETOS} GOARCH=${TARGETARCH} \
+    go build -trimpath -ldflags="-s -w" -o /out/server ./cmd/server
+
+# ---------- Stage 3: runtime (scratch) ----------
+FROM scratch
+COPY --from=builder /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/ca-certificates.crt
+COPY --from=builder /out/server /server
+
+LABEL org.opencontainers.image.title="zad1-weather"
+LABEL org.opencontainers.image.description="Aplikacja pogodowa (Zadanie 1, część dodatkowa v3) — multi-arch + cache + mount ssh/secret"
+LABEL org.opencontainers.image.authors="Hubert Kolejko"
+LABEL org.opencontainers.image.source="https://github.com/GhostekTheGuy/zad1_lab_docker"
+LABEL org.opencontainers.image.licenses="MIT"
+LABEL org.opencontainers.image.version="1.0.0-dod"
+
+USER 65534:65534
+EXPOSE 8080
+HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
+    CMD ["/server", "-healthcheck"]
+ENTRYPOINT ["/server"]
