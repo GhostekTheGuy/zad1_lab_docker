@@ -1,11 +1,11 @@
-// Zadanie 1 — Aplikacja pogodowa (Programowanie Aplikacji w Chmurze Obliczeniowej).
+// Zadanie 1 - Aplikacja pogodowa (Programowanie Aplikacji w Chmurze Obliczeniowej).
 // Autor: Hubert Kolejko.
 //
 // Aplikacja serwuje prosty formularz HTML pozwalający wybrać kraj i miasto
 // z predefiniowanej listy, a następnie wyświetla bieżące dane pogodowe
 // pobrane z publicznego API Open-Meteo (bez klucza API).
 //
-// Brak zewnętrznych zależności — wyłącznie biblioteka standardowa Go,
+// Brak zewnętrznych zależności - wyłącznie biblioteka standardowa Go,
 // dzięki czemu wynikowa binarka jest statyczna i mieści się w obrazie scratch.
 package main
 
@@ -33,7 +33,7 @@ type City struct {
 	Longitude float64
 }
 
-// Country reprezentuje kraj wraz z listą miast — używane w szablonie HTML.
+// Country reprezentuje kraj wraz z listą miast - używane w szablonie HTML.
 type Country struct {
 	Code   string
 	Name   string
@@ -92,7 +92,7 @@ func findCity(countryCode, cityName string) (Country, City, bool) {
 	return Country{}, City{}, false
 }
 
-// openMeteoResponse — fragment odpowiedzi API Open-Meteo (current weather).
+// openMeteoResponse - fragment odpowiedzi API Open-Meteo (current weather).
 type openMeteoResponse struct {
 	Current struct {
 		Time              string  `json:"time"`
@@ -112,7 +112,7 @@ type openMeteoResponse struct {
 	Timezone string `json:"timezone"`
 }
 
-// weatherCodeDescription — mapowanie WMO Weather Codes na opis (PL).
+// weatherCodeDescription - mapowanie WMO Weather Codes na opis (PL).
 // Pełna lista: https://open-meteo.com/en/docs (sekcja Weather variable documentation).
 var weatherCodeDescription = map[int]string{
 	0:  "Słonecznie",
@@ -169,12 +169,12 @@ func fetchWeather(ctx context.Context, lat, lon float64) (*openMeteoResponse, er
 	return &out, nil
 }
 
-// HTML szablony — proste, zaszyte w binarce, bez plików zewnętrznych.
+// HTML szablony - proste, zaszyte w binarce, bez plików zewnętrznych.
 
 const indexTmpl = `<!doctype html>
 <html lang="pl"><head>
 <meta charset="utf-8">
-<title>Zadanie 1 — Pogoda</title>
+<title>Zadanie 1 - Pogoda</title>
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <style>
  body{font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;max-width:560px;margin:2rem auto;padding:0 1rem;background:#0f172a;color:#e2e8f0}
@@ -193,14 +193,14 @@ const indexTmpl = `<!doctype html>
  <div>
   <label for="country">Kraj</label><br>
   <select id="country" name="country" required onchange="updateCities()">
-   <option value="">— wybierz —</option>
+   <option value="">- wybierz -</option>
    {{range .Countries}}<option value="{{.Code}}">{{.Name}}</option>{{end}}
   </select>
  </div>
  <div>
   <label for="city">Miasto</label><br>
   <select id="city" name="city" required>
-   <option value="">— najpierw kraj —</option>
+   <option value="">- najpierw kraj -</option>
   </select>
  </div>
  <button type="submit">Sprawdź pogodę</button>
@@ -211,7 +211,7 @@ const indexTmpl = `<!doctype html>
  function updateCities(){
   const cs = document.getElementById('city');
   const code = document.getElementById('country').value;
-  cs.innerHTML = '<option value="">— wybierz —</option>';
+  cs.innerHTML = '<option value="">- wybierz -</option>';
   (data[code]||[]).forEach(n => {
    const o = document.createElement('option'); o.value=n; o.textContent=n; cs.appendChild(o);
   });
@@ -261,7 +261,7 @@ func main() {
 
 	if *healthcheck {
 		// Tryb healthcheck używany przez Docker HEALTHCHECK w obrazie scratch
-		// (brak curl/wget — wykorzystujemy samą binarkę).
+		// (brak curl/wget - wykorzystujemy samą binarkę).
 		client := &http.Client{Timeout: 2 * time.Second}
 		resp, err := client.Get("http://127.0.0.1:" + port + "/health")
 		if err != nil || resp.StatusCode != http.StatusOK {
@@ -273,7 +273,7 @@ func main() {
 	// Wymagane logi startowe (punkt 1a zadania).
 	startTime := time.Now().Format(time.RFC3339)
 	log.SetFlags(0)
-	log.Printf("== Zadanie 1 — start aplikacji ==")
+	log.Printf("== Zadanie 1 - start aplikacji ==")
 	log.Printf("Data uruchomienia : %s", startTime)
 	log.Printf("Autor             : %s", Author)
 	log.Printf("Port TCP (nasłuch): %s", port)

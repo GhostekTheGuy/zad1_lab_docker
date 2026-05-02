@@ -1,16 +1,14 @@
-# Zadanie 1 — część NIEOBOWIĄZKOWA, wariant 3 (max. +80%)
+# Zadanie 1 - część dodatkowa, wariant 3 (max. +80%)
 
-**Autor:** Hubert Kolejko
-**Repozytorium GitHub:** <https://github.com/GhostekTheGuy/zad1_lab_docker>
-**Repozytorium DockerHub:** <https://hub.docker.com/r/hubertkolejko/zad1-weather>
+Autor: Hubert Kolejko
+GitHub: https://github.com/GhostekTheGuy/zad1_lab_docker
+DockerHub: https://hub.docker.com/r/hubertkolejko/zad1-weather
 
-> **Wybrany poziom:** **3 (max. +80%)** — multi-arch (linux/amd64 + linux/arm64) z builderem `docker-container`, rozszerzony frontend BuildKit, `--mount=type=ssh` / `--mount=type=secret` do pobrania kodu z publicznego repozytorium GitHub w trakcie buildu, eksporter cache `registry` w trybie `max`.
-
----
+Wybrałem wariant 3: multi-arch (linux/amd64 + linux/arm64) na builderze `docker-container`, rozszerzony frontend BuildKit, `mount=type=ssh` / `mount=type=secret` do pobrania kodu z publicznego repo GitHub w trakcie buildu, cache registry w trybie `max`.
 
 ## Plik Dockerfile
 
-Wykorzystano osobny plik [`Dockerfile.dod`](Dockerfile.dod) z dyrektywą `# syntax=docker/dockerfile:1.7-labs` (rozszerzony frontend BuildKit). Etap `source` używa równolegle dwóch typów mount-ów:
+Osobny plik `Dockerfile.dod` z `# syntax=docker/dockerfile:1.7-labs` (rozszerzony frontend). W stage `source` użyłem od razu obu typów mount-ów, bo chciałem żeby działało zarówno z agentem SSH jak i z PAT-em:
 
 ```dockerfile
 RUN --mount=type=ssh \
@@ -30,19 +28,13 @@ RUN --mount=type=ssh \
     fi
 ```
 
-Logika etapu `source`:
+Logika jest taka: najpierw próbuję klonować przez SSH (jeśli host przekazał `--ssh default` i agent ma klucz). Jeśli nie, próbuję przez HTTPS z tokenem z `--secret id=gh_token`. Jako ostatnia deska ratunku - anonimowy klon HTTPS, bo repo jest publiczne. Dzięki temu obraz da się zbudować w różnych warunkach a Dockerfile pokazuje obie funkcjonalności (mount ssh i mount secret) o które chodzi w treści zadania.
 
-1. Najpierw próba klonowania przez SSH (gdy host przekazał agenta `--ssh default` z dostępnym kluczem) — preferowane, demonstruje **mount=type=ssh**.
-2. Fallback do HTTPS z PAT-em (gdy host przekazał `--secret id=gh_token,...`) — demonstruje **mount=type=secret**.
-3. Ostatnia linia obrony: anonimowy klon HTTPS (możliwy, bo repozytorium jest publiczne).
+Reszta pliku (stage `builder` na `golang:1.26-alpine` i runtime na `scratch`) wygląda jak w wersji obowiązkowej.
 
-Kolejne etapy (`builder` na bazie `golang:1.22-alpine`, `runtime` na bazie `scratch`) — analogicznie jak w wersji obowiązkowej.
+## 1. Builder docker-container
 
----
-
-## 1. Builder oparty na sterowniku `docker-container`
-
-Konfiguracja BuildKit (plik `/tmp/buildkitd.toml`) — dopuszcza HTTP do registry użytego do cache'a (lokalnie w trakcie testów `localhost:5050`; do zgłoszenia DockerHub):
+Konfiguracja BuildKit (plik `/tmp/buildkitd.toml`) - potrzebna była przy testach na lokalnym registry, dla DockerHub można pominąć:
 
 ```toml
 [registry."localhost:5050"]
@@ -50,7 +42,7 @@ Konfiguracja BuildKit (plik `/tmp/buildkitd.toml`) — dopuszcza HTTP do registr
   insecure = true
 ```
 
-Utworzenie buildera:
+Builder:
 
 ```bash
 docker buildx create --name zad1builder \
@@ -59,8 +51,6 @@ docker buildx create --name zad1builder \
   --buildkitd-config /tmp/buildkitd.toml \
   --bootstrap --use
 ```
-
-Weryfikacja:
 
 ```bash
 docker buildx inspect zad1builder
@@ -75,9 +65,9 @@ Platforms:     linux/arm64, linux/amd64, linux/amd64/v2, linux/riscv64, linux/pp
 Status:        running
 ```
 
----
+Driver `docker-container` jest tu wymagany, bo zwykły `docker` driver nie obsługuje builda multi-platform.
 
-## 2. Build multi-arch z mount=ssh/secret + cache registry max
+## 2. Build multi-arch z mount=ssh + cache registry max
 
 ```bash
 docker buildx build \
@@ -93,17 +83,13 @@ docker buildx build \
   .
 ```
 
-(Opcjonalnie: dodać `--secret id=gh_token,src=$HOME/.gh_token` jeśli klonowanie ma iść przez PAT zamiast SSH.)
+Jeśli zamiast SSH chcemy użyć tokena, dochodzi `--secret id=gh_token,src=$HOME/.gh_token`.
 
----
-
-## 3. Weryfikacja: manifest zawiera obie platformy
+## 3. Manifest zawiera obie platformy
 
 ```bash
 docker buildx imagetools inspect hubertkolejko/zad1-weather:multiarch
 ```
-
-Wynik (wycinek):
 
 ```
 Name:      docker.io/hubertkolejko/zad1-weather:multiarch
@@ -111,36 +97,30 @@ MediaType: application/vnd.oci.image.index.v1+json
 Digest:    sha256:96020f58651be7c8d78383ecd5a74de4c6339751d8f8ac34e22d9e6f24a1590d
 
 Manifests:
-  Name:        docker.io/hubertkolejko/zad1-weather:multiarch@sha256:d54644705bfd2679...
-  MediaType:   application/vnd.oci.image.manifest.v1+json
+  Name:        ...@sha256:d54644705bfd2679...
   Platform:    linux/amd64
 
-  Name:        docker.io/hubertkolejko/zad1-weather:multiarch@sha256:b208b96c17b2ab6e...
-  MediaType:   application/vnd.oci.image.manifest.v1+json
+  Name:        ...@sha256:b208b96c17b2ab6e...
   Platform:    linux/arm64
 
-  Name:        docker.io/hubertkolejko/zad1-weather:multiarch@sha256:455495901fc17b4a...
-  MediaType:   application/vnd.oci.image.manifest.v1+json
+  Name:        ...@sha256:455495901fc17b4a...
   Platform:    unknown/unknown
   Annotations:
     vnd.docker.reference.type:   attestation-manifest
     vnd.docker.reference.digest: sha256:d54644705bfd2679...
 
-  Name:        docker.io/hubertkolejko/zad1-weather:multiarch@sha256:376c3089dd8f2a3e...
-  MediaType:   application/vnd.oci.image.manifest.v1+json
+  Name:        ...@sha256:376c3089dd8f2a3e...
   Platform:    unknown/unknown
   Annotations:
     vnd.docker.reference.type:   attestation-manifest
     vnd.docker.reference.digest: sha256:b208b96c17b2ab6e...
 ```
 
-✅ Manifest zawiera deklaracje dla **linux/amd64** i **linux/arm64**, plus dwa attestation manifesty (provenance) dla każdej platformy — co jest standardowym artefaktem buildx z BuildKit ≥ 0.11.
+W manifeście są obie wymagane platformy (`linux/amd64`, `linux/arm64`) plus dwa attestation manifesty z provenance, które buildx dokleja domyślnie od BuildKit 0.11.
 
----
+## 4. Cache poprawnie działa
 
-## 4. Weryfikacja: cache z DockerHub jest poprawnie wykorzystywany
-
-Tag `buildcache` istnieje na DockerHub:
+Tag `buildcache` jest na DockerHub:
 
 ```bash
 docker buildx imagetools inspect hubertkolejko/zad1-weather:buildcache
@@ -152,7 +132,7 @@ MediaType: application/vnd.oci.image.manifest.v1+json
 Digest:    sha256:2f0e297a3f52c6618f5ee5d7079b66f354877648b5f76020c509690810d0eae9
 ```
 
-**Test poprawności cache** — czyścimy lokalny cache buildera i powtarzamy build:
+Żeby pokazać że cache faktycznie się przenosi przez registry, czyszczę lokalny cache buildera i puszczam ten sam build jeszcze raz:
 
 ```bash
 docker buildx prune -f --builder zad1builder
@@ -166,7 +146,7 @@ docker buildx build \
   --push .
 ```
 
-Wycinek z drugiego buildu — wszystkie znaczące kroki dla obu platform są oznaczone `CACHED`:
+W drugim buildzie wszystkie istotne kroki są oznaczone `CACHED`:
 
 ```
 #3  CACHED   [internal] load metadata for docker.io/library/alpine:3.20
@@ -176,16 +156,14 @@ Wycinek z drugiego buildu — wszystkie znaczące kroki dla obu platform są ozn
 #18 CACHED   [linux/arm64 source 4/4] RUN --mount=type=ssh --mount=type=secret,id=gh_token git clone ...
 #20 CACHED   [linux/arm64 builder 6/6] RUN ... CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build ...
 #22 CACHED   [linux/arm64 builder 4/6] RUN --mount=type=cache,target=/go/pkg/mod  go mod download
-#11 #12 #13 #14 #16 #19 #21 #23 #24  CACHED   pozostałe kroki (COPY, WORKDIR, FROM)
+#11 #12 #13 #14 #16 #19 #21 #23 #24  CACHED  (COPY, WORKDIR, FROM)
 ```
 
-✅ **16 kroków `CACHED`** — w tym kosztowne kompilacje Go (kroki #17, #20) i krok `mount=ssh` z klonowaniem repo (krok #18). Drugi build skończył się w kilkanaście sekund (głównie czas eksportu cache i pushu manifestu).
+W sumie 16 kroków z cache. Najważniejsze że cachują się też kosztowne `go build` dla obu architektur (#17, #20) i sam `mount=ssh` z `git clone` (#18). Drugi build przeszedł w kilkanaście sekund - większość czasu zajął sam push manifestu i eksport cache, bo żaden krok nie musiał być wykonany od zera.
 
----
+## 5. Skan CVE (Trivy)
 
-## 5. Skan podatności CVE (Trivy)
-
-Zgodnie z wymogiem **PODSTAWOWYM nr 3** części dodatkowej obraz został przeskanowany pod kątem podatności CRITICAL/HIGH:
+Zgodnie z wymogiem podstawowym 3 części dodatkowej zeskanowałem obraz Trivym:
 
 ```bash
 trivy image --severity CRITICAL,HIGH \
@@ -193,9 +171,7 @@ trivy image --severity CRITICAL,HIGH \
   hubertkolejko/zad1-weather:multiarch
 ```
 
-Pełny raport: [`docs/trivy-report.txt`](docs/trivy-report.txt) (single-arch) oraz [`docs/trivy-report-multiarch.txt`](docs/trivy-report-multiarch.txt) (multi-arch).
-
-**Wynik**:
+Raporty są w `docs/trivy-report.txt` (single-arch) i `docs/trivy-report-multiarch.txt` (multi-arch).
 
 ```
 Report Summary
@@ -206,22 +182,14 @@ Report Summary
 └────────┴──────────┴─────────────────┴─────────┘
 ```
 
-✅ **Zero podatności CRITICAL/HIGH** w obrazie zarówno dla wariantu single-arch jak i multi-arch.
+Zero podatności CRITICAL/HIGH dla obu wariantów.
 
-**Komentarz do iteracji**: Pierwszy build (Go 1.22.12 z `golang:1.22-alpine`) ujawnił 10 podatności (1 CRITICAL + 9 HIGH) wszystkie w Go `stdlib`. Po podbiciu `ARG GO_VERSION=1.26` w obu Dockerfile'ach (toolchain `golang:1.26-alpine` zawiera Go 1.26.2, w którym wszystkie te CVE są załatane) ponowny skan zwrócił **0 podatności**. Pokazuje to ważność regularnego rebuildu obrazu z aktualnym toolchainem nawet dla aplikacji w obrazie scratch — choć w samym obrazie nie ma żadnych pakietów dystrybucji, statycznie wkompilowana stdlib Go jest objęta skanem `gobinary` w Trivy.
+Drobna historia: pierwszy build leciał na `golang:1.22-alpine` i Trivy wykrył 10 podatności (1 CRITICAL + 9 HIGH) wszystkie w stdlib Go 1.22.12. Po podbiciu `ARG GO_VERSION=1.26` (czyli `golang:1.26-alpine` z Go 1.26.2) drugi skan zwrócił 0 podatności, bo wszystkie te CVE są tam już załatane. Sam obraz finalny to `scratch` z dwoma plikami (binarka i CA certs), więc nie ma w nim żadnego apk/apt/glibc do skanowania - jedyne co Trivy widzi to wkompilowana stdlib Go w binarce, i wystarczy odpowiednia wersja toolchainu żeby było czysto.
 
-**Uzasadnienie minimalnej powierzchni ataku**:
+## Linki
 
-- Obraz finalny `FROM scratch` — brak jakiegokolwiek systemu plików dystrybucji, brak menedżera pakietów, brak binarek systemowych.
-- W obrazie znajdują się dosłownie **2 pliki**: skompilowana statycznie binarka Go (`/server`) oraz pakiet zaufanych certyfikatów (`/etc/ssl/certs/ca-certificates.crt`). To eliminuje cały typowy zakres CVE z poziomu OS (apk/apt/musl/glibc).
-- **Brak zewnętrznych zależności w `go.mod`** — używana jest wyłącznie biblioteka standardowa Go. CVE w stdlib Go są łatane wraz z aktualizacją toolchainu, więc rebuild rozwiązuje problem.
-
----
-
-## 6. Linki finalne
-
-- **GitHub**: <https://github.com/GhostekTheGuy/zad1_lab_docker>
-- **DockerHub**: <https://hub.docker.com/r/hubertkolejko/zad1-weather>
-  - `multiarch` / `1.0.0-dod` — obraz multi-arch (linux/amd64 + linux/arm64) z części dodatkowej v3
-  - `buildcache` — registry cache (mode=max) dla powyższego obrazu
-  - `latest` / `1.0.0` — obraz z części obowiązkowej (single-arch)
+- GitHub: https://github.com/GhostekTheGuy/zad1_lab_docker
+- DockerHub: https://hub.docker.com/r/hubertkolejko/zad1-weather
+  - `multiarch` / `1.0.0-dod` - obraz multi-arch z części dodatkowej
+  - `buildcache` - cache registry (mode=max)
+  - `latest` / `1.0.0` - obraz z części obowiązkowej (single-arch)

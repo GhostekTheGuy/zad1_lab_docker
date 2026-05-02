@@ -1,14 +1,14 @@
 # syntax=docker/dockerfile:1.7
 #
-# Zadanie 1 — wieloetapowy Dockerfile dla aplikacji pogodowej (Hubert Kolejko).
+# Zadanie 1 - wieloetapowy Dockerfile dla aplikacji pogodowej (Hubert Kolejko).
 #
 # Założenia projektowe:
-#   * obraz finalny oparty o "scratch" — minimalny rozmiar (cel: < 10 MB),
-#   * statycznie linkowana binarka Go (CGO_ENABLED=0) — działa bez glibc/musl,
+#   * obraz finalny oparty o "scratch" - minimalny rozmiar (cel: < 10 MB),
+#   * statycznie linkowana binarka Go (CGO_ENABLED=0) - działa bez glibc/musl,
 #   * cache mount BuildKit (`--mount=type=cache`) dla modułów Go i build-cache
 #     przyspiesza powtórne buildy bez powiększania finalnego obrazu,
 #   * `--platform=$BUILDPLATFORM` w stage'u builder pozwala na cross-compile
-#     do innej architektury (linux/amd64, linux/arm64) — kluczowe dla buildx,
+#     do innej architektury (linux/amd64, linux/arm64) - kluczowe dla buildx,
 #   * dwa COPY w stage'u runtime (CA + binarka) -> minimum warstw,
 #   * HEALTHCHECK używa samej binarki z flagą -healthcheck (scratch nie ma
 #     curl/wget/sh, więc nie da się użyć klasycznego CMD shellowego).
@@ -52,13 +52,13 @@ COPY --from=builder /out/server /server
 
 # Etykiety zgodne ze standardem OCI (https://specs.opencontainers.org/image-spec/annotations/).
 LABEL org.opencontainers.image.title="zad1-weather"
-LABEL org.opencontainers.image.description="Aplikacja pogodowa — Zadanie 1, lab Programowanie Aplikacji w Chmurze Obliczeniowej"
+LABEL org.opencontainers.image.description="Aplikacja pogodowa - Zadanie 1, lab Programowanie Aplikacji w Chmurze Obliczeniowej"
 LABEL org.opencontainers.image.authors="Hubert Kolejko"
 LABEL org.opencontainers.image.source="https://github.com/GhostekTheGuy/zad1_lab_docker"
 LABEL org.opencontainers.image.licenses="MIT"
 LABEL org.opencontainers.image.version="1.0.0"
 
-# Uruchamiamy jako użytkownik nobody (UID 65534) — zasada najmniejszych uprawnień.
+# Uruchamiamy jako użytkownik nobody (UID 65534) - zasada najmniejszych uprawnień.
 USER 65534:65534
 
 EXPOSE 8080

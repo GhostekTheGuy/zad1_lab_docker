@@ -1,17 +1,18 @@
-Zadanie 1 — Programowanie Aplikacji w Chmurze Obliczeniowej
+Zadanie 1 - Programowanie Aplikacji w Chmurze Obliczeniowej
 Autor: Hubert Kolejko
 
-Repozytorium GitHub (zawiera kod, Dockerfile, sprawozdanie zadanie1.md i zadanie1_dod.md):
+GitHub (kod, Dockerfile, sprawozdania zadanie1.md i zadanie1_dod.md):
 https://github.com/GhostekTheGuy/zad1_lab_docker
 
-Repozytorium DockerHub:
+DockerHub:
 https://hub.docker.com/r/hubertkolejko/zad1-weather
 
 Tagi:
-- hubertkolejko/zad1-weather:latest        — wersja obowiązkowa (single-arch, 3.49 MB skompresowany)
-- hubertkolejko/zad1-weather:1.0.0         — alias dla :latest
-- hubertkolejko/zad1-weather:multiarch     — wersja dodatkowa v3 (linux/amd64 + linux/arm64)
-- hubertkolejko/zad1-weather:1.0.0-dod     — alias dla :multiarch
-- hubertkolejko/zad1-weather:buildcache    — registry cache (mode=max) używany w buildzie multi-arch
+- hubertkolejko/zad1-weather:latest        - wersja obowiązkowa (single-arch, 3.49 MB skompresowany)
+- hubertkolejko/zad1-weather:1.0.0         - alias dla :latest
+- hubertkolejko/zad1-weather:multiarch     - wersja dodatkowa v3 (linux/amd64 + linux/arm64)
+- hubertkolejko/zad1-weather:1.0.0-dod     - alias dla :multiarch
+- hubertkolejko/zad1-weather:buildcache    - cache registry (mode=max) z buildu multi-arch
 
-Skan CVE (Trivy, severity CRITICAL+HIGH): 0 podatności — patrz docs/trivy-report.txt oraz docs/trivy-report-multiarch.txt w repozytorium.
+Skan CVE (Trivy, severity CRITICAL+HIGH): 0 podatności.
+Raporty: docs/trivy-report.txt i docs/trivy-report-multiarch.txt w repozytorium.
