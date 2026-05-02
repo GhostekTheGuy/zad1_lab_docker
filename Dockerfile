@@ -13,7 +13,7 @@
 #   * HEALTHCHECK używa samej binarki z flagą -healthcheck (scratch nie ma
 #     curl/wget/sh, więc nie da się użyć klasycznego CMD shellowego).
 
-ARG GO_VERSION=1.22
+ARG GO_VERSION=1.26
 
 # ---------- Stage 1: builder ----------
 FROM --platform=$BUILDPLATFORM golang:${GO_VERSION}-alpine AS builder

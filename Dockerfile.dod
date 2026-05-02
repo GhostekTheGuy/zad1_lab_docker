@@ -12,7 +12,7 @@
 #   4. Wieloetapowy build z osobnym etapem `source` -> `builder` -> runtime (scratch).
 #   5. Obraz finalny scratch, OCI labels, healthcheck — analogicznie jak Dockerfile.
 
-ARG GO_VERSION=1.22
+ARG GO_VERSION=1.26
 
 # URL repozytorium domyślnie wskazuje na repo autora; można nadpisać --build-arg.
 ARG REPO_URL=https://github.com/GhostekTheGuy/zad1_lab_docker.git
