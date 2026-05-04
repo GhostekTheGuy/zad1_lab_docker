@@ -141,6 +141,21 @@ var weatherCodeDescription = map[int]string{
 	99: "Burza z silnym gradem",
 }
 
+// weatherCodeEmoji - emoji-ikona pasująca do kodu WMO. Używane w UI.
+var weatherCodeEmoji = map[int]string{
+	0:  "☀️",
+	1:  "🌤️",
+	2:  "⛅",
+	3:  "☁️",
+	45: "🌫️", 48: "🌫️",
+	51: "🌦️", 53: "🌦️", 55: "🌧️",
+	61: "🌧️", 63: "🌧️", 65: "🌧️",
+	71: "🌨️", 73: "🌨️", 75: "❄️", 77: "❄️",
+	80: "🌦️", 81: "🌧️", 82: "⛈️",
+	85: "🌨️", 86: "❄️",
+	95: "⛈️", 96: "⛈️", 99: "⛈️",
+}
+
 // fetchWeather wywołuje Open-Meteo i zwraca surowe dane do dalszego renderowania.
 func fetchWeather(ctx context.Context, lat, lon float64) (*openMeteoResponse, error) {
 	url := fmt.Sprintf(
@@ -171,51 +186,162 @@ func fetchWeather(ctx context.Context, lat, lon float64) (*openMeteoResponse, er
 
 // HTML szablony - proste, zaszyte w binarce, bez plików zewnętrznych.
 
+// Wspólne style/efekty dla obu szablonów - shadcn-style tokens + liquid glass
+// (animowane gradient-blobs w tle, backdrop-filter na kartach, inset highlights).
+const sharedCSS = `
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+ --bg:222 47% 5%; --fg:210 40% 98%; --muted:215 20% 70%;
+ --border:220 15% 22%; --primary:217 91% 60%; --primary-glow:217 91% 70%;
+ --accent:280 80% 62%; --warm:35 92% 60%; --radius:20px;
+}
+html,body{height:100%}
+body{
+ font-family:-apple-system,BlinkMacSystemFont,Inter,'Segoe UI',Roboto,sans-serif;
+ font-feature-settings:"cv11","ss01","ss03";
+ -webkit-font-smoothing:antialiased;
+ background:hsl(var(--bg)); color:hsl(var(--fg));
+ min-height:100vh; overflow-x:hidden; position:relative;
+ display:flex; align-items:center; justify-content:center;
+ padding:2rem 1rem;
+}
+/* Animowane gradient-blobs w tle - dają "płyn" pod warstwą szkła */
+.bg-blob{position:fixed; border-radius:50%; filter:blur(90px); opacity:.55; z-index:0; pointer-events:none; will-change:transform}
+.bg-blob.b1{top:-15%; left:-10%; width:55vw; height:55vw;
+ background:radial-gradient(circle,hsl(217 91% 55%),transparent 70%);
+ animation:drift1 22s ease-in-out infinite alternate}
+.bg-blob.b2{bottom:-15%; right:-10%; width:60vw; height:60vw;
+ background:radial-gradient(circle,hsl(280 85% 55%),transparent 70%);
+ animation:drift2 26s ease-in-out infinite alternate}
+.bg-blob.b3{top:30%; right:20%; width:35vw; height:35vw;
+ background:radial-gradient(circle,hsl(190 85% 55%),transparent 70%);
+ animation:drift3 30s ease-in-out infinite alternate; opacity:.35}
+@keyframes drift1{from{transform:translate(0,0) scale(1)} to{transform:translate(15%,8%) scale(1.15)}}
+@keyframes drift2{from{transform:translate(0,0) scale(1)} to{transform:translate(-12%,-6%) scale(1.1)}}
+@keyframes drift3{from{transform:translate(0,0) scale(.9)} to{transform:translate(8%,-10%) scale(1.2)}}
+
+.container{position:relative; z-index:1; width:100%; max-width:480px}
+
+/* Liquid glass - półprzezroczystość + blur + saturacja + krawędziowy highlight */
+.glass{
+ background:rgba(255,255,255,.04);
+ backdrop-filter:blur(28px) saturate(180%);
+ -webkit-backdrop-filter:blur(28px) saturate(180%);
+ border:1px solid rgba(255,255,255,.08);
+ border-radius:var(--radius);
+ box-shadow:0 10px 40px rgba(0,0,0,.45),inset 0 1px 0 rgba(255,255,255,.12);
+ position:relative; overflow:hidden;
+}
+/* Specular gradient na krawędzi (1px ramka z gradientem) */
+.glass::before{
+ content:''; position:absolute; inset:0; border-radius:inherit; padding:1px;
+ background:linear-gradient(135deg,rgba(255,255,255,.22),transparent 45%,rgba(255,255,255,.05) 75%,rgba(255,255,255,.15));
+ -webkit-mask:linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0);
+ -webkit-mask-composite:xor; mask-composite:exclude; pointer-events:none;
+}
+
+h1{font-size:1.5rem; font-weight:600; letter-spacing:-.02em; display:flex; align-items:center; gap:.55rem}
+.subtitle{color:hsl(var(--muted)); font-size:.875rem; line-height:1.55; margin:.4rem 0 1.5rem}
+.subtitle a{color:hsl(var(--primary-glow)); text-decoration:none; border-bottom:1px dashed hsl(var(--primary-glow)/.4)}
+.subtitle a:hover{color:hsl(var(--fg))}
+
+.field{display:flex; flex-direction:column; gap:.5rem; margin-bottom:1rem}
+label{font-size:.8125rem; font-weight:500; color:hsl(var(--muted)); letter-spacing:.01em}
+
+.select-wrap{position:relative}
+select{
+ appearance:none; -webkit-appearance:none; width:100%;
+ background:rgba(255,255,255,.05);
+ border:1px solid rgba(255,255,255,.1); border-radius:12px;
+ padding:.78rem 2.5rem .78rem 1rem;
+ color:hsl(var(--fg)); font-size:.9375rem; font-family:inherit; cursor:pointer;
+ transition:background .2s,border-color .2s,box-shadow .2s;
+}
+select:hover:not(:disabled){background:rgba(255,255,255,.08); border-color:rgba(255,255,255,.18)}
+select:focus{outline:none; border-color:hsl(var(--primary)/.7); box-shadow:0 0 0 3px hsl(var(--primary)/.18)}
+select:disabled{opacity:.5; cursor:not-allowed}
+select option{background:#13162a; color:hsl(var(--fg))}
+.select-wrap::after{
+ content:''; position:absolute; right:1.1rem; top:50%; width:8px; height:8px;
+ border-right:2px solid hsl(var(--muted)); border-bottom:2px solid hsl(var(--muted));
+ transform:translateY(-70%) rotate(45deg); pointer-events:none;
+}
+
+button.primary{
+ width:100%; margin-top:.6rem; border:none; cursor:pointer;
+ background:linear-gradient(135deg,hsl(var(--primary)),hsl(var(--accent)));
+ color:white; border-radius:12px; padding:.9rem;
+ font-size:.9375rem; font-weight:600; font-family:inherit;
+ position:relative; overflow:hidden;
+ transition:transform .15s,box-shadow .25s;
+ box-shadow:0 6px 20px hsl(var(--primary)/.4),inset 0 1px 0 rgba(255,255,255,.22);
+}
+button.primary:hover{transform:translateY(-1px); box-shadow:0 10px 28px hsl(var(--primary)/.55),inset 0 1px 0 rgba(255,255,255,.28)}
+button.primary:active{transform:translateY(0)}
+button.primary::after{
+ content:''; position:absolute; top:0; left:-100%; width:100%; height:100%;
+ background:linear-gradient(90deg,transparent,rgba(255,255,255,.25),transparent);
+ transition:left .65s ease;
+}
+button.primary:hover::after{left:100%}
+
+footer{margin-top:1.25rem; text-align:center; font-size:.75rem; color:hsl(var(--muted)/.7)}
+.kbd{font-family:ui-monospace,SFMono-Regular,Menlo,monospace; padding:.05rem .35rem; border-radius:4px; background:rgba(255,255,255,.06); border:1px solid rgba(255,255,255,.08); font-size:.75rem}
+`
+
 const indexTmpl = `<!doctype html>
 <html lang="pl"><head>
 <meta charset="utf-8">
 <title>Zadanie 1 - Pogoda</title>
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<style>
- body{font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;max-width:560px;margin:2rem auto;padding:0 1rem;background:#0f172a;color:#e2e8f0}
- h1{font-size:1.4rem;margin-bottom:.4rem}
- .sub{color:#94a3b8;margin-bottom:1.5rem}
- form{background:#1e293b;padding:1.25rem;border-radius:.6rem;display:grid;gap:.8rem}
- label{font-size:.85rem;color:#94a3b8}
- select,button{padding:.55rem;border-radius:.4rem;border:1px solid #334155;background:#0f172a;color:#e2e8f0;font-size:.95rem}
- button{cursor:pointer;background:#2563eb;border-color:#2563eb;font-weight:600}
- button:hover{background:#1d4ed8}
- footer{margin-top:1.5rem;font-size:.8rem;color:#64748b}
+<style>` + sharedCSS + `
+.glass{padding:2rem}
+.title-icon{font-size:1.4rem; filter:drop-shadow(0 0 12px hsl(var(--warm)/.7))}
+.hint{display:flex; align-items:center; gap:.4rem; margin-top:.85rem; font-size:.75rem; color:hsl(var(--muted)/.85)}
 </style></head><body>
-<h1>🌤️ Aplikacja pogodowa</h1>
-<p class="sub">Wybierz kraj i miasto, aby sprawdzić aktualną pogodę. Dane: <a href="https://open-meteo.com" style="color:#60a5fa">Open-Meteo</a>.</p>
-<form action="/weather" method="get">
- <div>
-  <label for="country">Kraj</label><br>
-  <select id="country" name="country" required onchange="updateCities()">
-   <option value="">- wybierz -</option>
-   {{range .Countries}}<option value="{{.Code}}">{{.Name}}</option>{{end}}
-  </select>
+<div class="bg-blob b1"></div><div class="bg-blob b2"></div><div class="bg-blob b3"></div>
+<div class="container">
+ <div class="glass">
+  <h1><span class="title-icon">🌤️</span>Aplikacja pogodowa</h1>
+  <p class="subtitle">Wybierz kraj i miasto, by zobaczyć bieżące dane. Źródło: <a href="https://open-meteo.com" target="_blank" rel="noopener">Open-Meteo</a>.</p>
+  <form action="/weather" method="get" id="weatherForm">
+   <div class="field">
+    <label for="country">Kraj</label>
+    <div class="select-wrap">
+     <select id="country" name="country" required onchange="updateCities()">
+      <option value="">— wybierz kraj —</option>
+      {{range .Countries}}<option value="{{.Code}}">{{.Name}}</option>{{end}}
+     </select>
+    </div>
+   </div>
+   <div class="field">
+    <label for="city">Miasto</label>
+    <div class="select-wrap">
+     <select id="city" name="city" required disabled>
+      <option value="">— najpierw wybierz kraj —</option>
+     </select>
+    </div>
+   </div>
+   <button type="submit" class="primary" id="submitBtn">Sprawdź pogodę</button>
+   <div class="hint">Tip: enter zatwierdza formularz <span class="kbd">↵</span></div>
+  </form>
  </div>
- <div>
-  <label for="city">Miasto</label><br>
-  <select id="city" name="city" required>
-   <option value="">- najpierw kraj -</option>
-  </select>
- </div>
- <button type="submit">Sprawdź pogodę</button>
-</form>
-<footer>Autor: {{.Author}}</footer>
+ <footer>Autor: {{.Author}} · zad1_lab_docker</footer>
+</div>
 <script>
  const data = {{.CitiesJSON}};
+ const citySel = document.getElementById('city');
  function updateCities(){
-  const cs = document.getElementById('city');
   const code = document.getElementById('country').value;
-  cs.innerHTML = '<option value="">- wybierz -</option>';
-  (data[code]||[]).forEach(n => {
-   const o = document.createElement('option'); o.value=n; o.textContent=n; cs.appendChild(o);
-  });
+  const list = data[code] || [];
+  citySel.innerHTML = '<option value="">— wybierz miasto —</option>' +
+   list.map(n => '<option value="'+n.replace(/"/g,'&quot;')+'">'+n+'</option>').join('');
+  citySel.disabled = list.length === 0;
  }
+ document.getElementById('weatherForm').addEventListener('submit', () => {
+  const b = document.getElementById('submitBtn');
+  b.textContent = 'Pobieranie…'; b.style.opacity = .8;
+ });
 </script>
 </body></html>`
 
@@ -224,30 +350,72 @@ const weatherTmpl = `<!doctype html>
 <meta charset="utf-8">
 <title>Pogoda: {{.City}}, {{.Country}}</title>
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<style>
- body{font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;max-width:560px;margin:2rem auto;padding:0 1rem;background:#0f172a;color:#e2e8f0}
- .card{background:#1e293b;border-radius:.6rem;padding:1.25rem;display:grid;gap:.5rem}
- h1{margin:0 0 .2rem 0;font-size:1.4rem}
- .loc{color:#94a3b8;margin-bottom:.6rem}
- .temp{font-size:2.4rem;font-weight:700;color:#fbbf24}
- .row{display:flex;justify-content:space-between;border-bottom:1px solid #334155;padding:.4rem 0}
- .row:last-child{border:none}
- .key{color:#94a3b8}
- a{color:#60a5fa}
- footer{margin-top:1.5rem;font-size:.8rem;color:#64748b}
+<style>` + sharedCSS + `
+.glass{padding:1.75rem}
+.head{display:flex; align-items:flex-start; justify-content:space-between; gap:1rem; margin-bottom:.4rem}
+.head .titles{display:flex; flex-direction:column; gap:.2rem}
+.head .desc{font-size:1.1rem; font-weight:600; letter-spacing:-.01em}
+.head .loc{font-size:.85rem; color:hsl(var(--muted))}
+.head .icon{font-size:3.2rem; line-height:1; filter:drop-shadow(0 0 24px hsl(var(--warm)/.55)); animation:float 6s ease-in-out infinite}
+@keyframes float{0%,100%{transform:translateY(0)} 50%{transform:translateY(-4px)}}
+
+.temp{
+ font-size:4rem; font-weight:700; letter-spacing:-.04em; line-height:1;
+ background:linear-gradient(135deg,hsl(var(--warm)),hsl(var(--accent)));
+ -webkit-background-clip:text; background-clip:text; -webkit-text-fill-color:transparent;
+ margin:.4rem 0 .2rem;
+}
+.temp .unit{font-size:1.6rem; vertical-align:top; margin-left:.15rem; opacity:.85}
+.feels{color:hsl(var(--muted)); font-size:.85rem; margin-bottom:1.25rem}
+
+.stats{display:grid; grid-template-columns:1fr 1fr; gap:.6rem}
+.stat{
+ background:rgba(255,255,255,.04);
+ border:1px solid rgba(255,255,255,.07);
+ border-radius:14px; padding:.85rem .95rem;
+ display:flex; flex-direction:column; gap:.2rem;
+ transition:background .2s,border-color .2s;
+}
+.stat:hover{background:rgba(255,255,255,.07); border-color:rgba(255,255,255,.12)}
+.stat .k{display:flex; align-items:center; gap:.4rem; font-size:.72rem; text-transform:uppercase; letter-spacing:.06em; color:hsl(var(--muted))}
+.stat .v{font-size:1.05rem; font-weight:600; font-variant-numeric:tabular-nums}
+
+.meta{margin-top:1rem; padding-top:.85rem; border-top:1px solid rgba(255,255,255,.06); display:flex; justify-content:space-between; font-size:.75rem; color:hsl(var(--muted))}
+
+.back{
+ display:inline-flex; align-items:center; gap:.4rem; margin-top:1rem;
+ padding:.6rem 1rem; border-radius:10px; text-decoration:none;
+ background:rgba(255,255,255,.05); border:1px solid rgba(255,255,255,.08);
+ color:hsl(var(--fg)); font-size:.875rem; transition:background .2s,transform .15s;
+}
+.back:hover{background:rgba(255,255,255,.09); transform:translateX(-2px)}
 </style></head><body>
-<div class="card">
- <h1>{{.Description}}</h1>
- <div class="loc">{{.City}}, {{.Country}} • {{.Timezone}}</div>
- <div class="temp">{{printf "%.1f" .TempC}} °C</div>
- <div class="row"><span class="key">Odczuwalna</span><span>{{printf "%.1f" .ApparentC}} °C</span></div>
- <div class="row"><span class="key">Wilgotność</span><span>{{.Humidity}} %</span></div>
- <div class="row"><span class="key">Wiatr</span><span>{{printf "%.1f" .WindKmh}} km/h</span></div>
- <div class="row"><span class="key">Opady</span><span>{{printf "%.1f" .PrecipMm}} mm</span></div>
- <div class="row"><span class="key">Pomiar</span><span>{{.Time}}</span></div>
+<div class="bg-blob b1"></div><div class="bg-blob b2"></div><div class="bg-blob b3"></div>
+<div class="container">
+ <div class="glass">
+  <div class="head">
+   <div class="titles">
+    <div class="desc">{{.Description}}</div>
+    <div class="loc">{{.City}}, {{.Country}} · {{.Timezone}}</div>
+   </div>
+   <div class="icon">{{.Emoji}}</div>
+  </div>
+  <div class="temp">{{printf "%.1f" .TempC}}<span class="unit">°C</span></div>
+  <div class="feels">Odczuwalna {{printf "%.1f" .ApparentC}} °C</div>
+  <div class="stats">
+   <div class="stat"><div class="k">💧 Wilgotność</div><div class="v">{{.Humidity}}%</div></div>
+   <div class="stat"><div class="k">💨 Wiatr</div><div class="v">{{printf "%.1f" .WindKmh}} km/h</div></div>
+   <div class="stat"><div class="k">🌧️ Opady</div><div class="v">{{printf "%.1f" .PrecipMm}} mm</div></div>
+   <div class="stat"><div class="k">🌡️ Odczuwalna</div><div class="v">{{printf "%.1f" .ApparentC}} °C</div></div>
+  </div>
+  <div class="meta">
+   <span>Pomiar: {{.Time}}</span>
+   <span>Open-Meteo</span>
+  </div>
+ </div>
+ <a href="/" class="back">← wróć do wyboru</a>
+ <footer>Autor: {{.Author}} · zad1_lab_docker</footer>
 </div>
-<p style="margin-top:1rem"><a href="/">← wróć do wyboru</a></p>
-<footer>Autor: {{.Author}} • Źródło: Open-Meteo</footer>
 </body></html>`
 
 func main() {
@@ -331,12 +499,17 @@ func main() {
 		if desc == "" {
 			desc = fmt.Sprintf("Kod pogody %d", data.Current.WeatherCode)
 		}
+		emoji := weatherCodeEmoji[data.Current.WeatherCode]
+		if emoji == "" {
+			emoji = "🌡️"
+		}
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
 		_ = tmplWeather.Execute(w, map[string]any{
 			"City":        loc.Name,
 			"Country":     c.Name,
 			"Timezone":    data.Timezone,
 			"Description": desc,
+			"Emoji":       emoji,
 			"TempC":       data.Current.Temperature2m,
 			"ApparentC":   data.Current.ApparentTemp,
 			"Humidity":    data.Current.RelativeHumidity,

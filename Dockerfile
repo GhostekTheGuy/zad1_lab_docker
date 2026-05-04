@@ -3,7 +3,7 @@
 # Zadanie 1 - wieloetapowy Dockerfile dla aplikacji pogodowej (Hubert Kolejko).
 #
 # Założenia projektowe:
-#   * obraz finalny oparty o "scratch" - minimalny rozmiar (cel: < 10 MB),
+#   * obraz finalny oparty o "scratch" - minimalny rozmiar,
 #   * statycznie linkowana binarka Go (CGO_ENABLED=0) - działa bez glibc/musl,
 #   * cache mount BuildKit (`--mount=type=cache`) dla modułów Go i build-cache
 #     przyspiesza powtórne buildy bez powiększania finalnego obrazu,
@@ -58,13 +58,23 @@ LABEL org.opencontainers.image.source="https://github.com/GhostekTheGuy/zad1_lab
 LABEL org.opencontainers.image.licenses="MIT"
 LABEL org.opencontainers.image.version="1.0.0"
 
-# Uruchamiamy jako użytkownik nobody (UID 65534) - zasada najmniejszych uprawnień.
+# Uruchamiamy jako nobody (UID 65534) - zasada najmniejszych uprawnień.                                                                               
+# Forma numeryczna USER UID:GID jest wymagana, bo scratch nie ma /etc/passwd                                                                          
+# ani /etc/group, więc runtime nie potrafiłby rozwiązać nazwy "nobody". 
 USER 65534:65534
+
 
 EXPOSE 8080
 
 # Healthcheck wywołuje samą binarkę z flagą -healthcheck (exit 0/1).
+# Healthcheck sprawdza czy aplikacja jest gotowa do użycia
+# interval - częstotliwość sprawdzania
+# timeout - maksymalny czas oczekiwania na odpowiedź
+# start-period - czas oczekiwania na uruchomienie aplikacji
+# retries - liczba ponownych prób
 HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
     CMD ["/server", "-healthcheck"]
-
+    
+# Forma exec - działa w scratch (shell form by nie zadziałała, bo nie ma /bin/sh).
+# ENTRYPOINT zamiast CMD - bo serwer ma się uruchomić zawsze, nie pozwalamy go nadpisać.
 ENTRYPOINT ["/server"]

@@ -78,4 +78,6 @@ USER 65534:65534
 EXPOSE 8080
 HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
     CMD ["/server", "-healthcheck"]
+# Forma exec - działa w scratch (shell form by nie zadziałała, bo nie ma /bin/sh).
+# ENTRYPOINT zamiast CMD - bo serwer ma się uruchomić zawsze, nie pozwalamy go nadpisać.
 ENTRYPOINT ["/server"]
